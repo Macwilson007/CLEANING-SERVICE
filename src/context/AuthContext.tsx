@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db, googleProvider } from '../firebase';
-import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 interface UserData {
@@ -16,6 +16,8 @@ interface AuthContextType {
   userData: UserData | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -68,6 +70,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signUpWithEmail = async (email: string, password: string, name: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const currentUser = userCredential.user;
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const newUserData = {
+        name: name,
+        email: currentUser.email || '',
+        role: currentUser.email === 'wilsonigiri@gmail.com' ? 'admin' : 'client',
+        createdAt: serverTimestamp()
+      };
+      await setDoc(userDocRef, newUserData);
+      setUserData({ uid: currentUser.uid, ...newUserData } as UserData);
+    } catch (error) {
+      console.error("Error signing up with email:", error);
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error("Error signing in with email:", error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -77,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, userData, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{ user, userData, loading, signInWithGoogle, signUpWithEmail, signInWithEmail, logout }}>
       {!loading && children}
     </AuthContext.Provider>
   );
