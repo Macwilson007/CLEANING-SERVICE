@@ -1,0 +1,7 @@
+{
+  "name": "CLEANING SERVICE",
+  "description": "Professional cleaning services with booking system, admin dashboard, and WhatsApp support.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

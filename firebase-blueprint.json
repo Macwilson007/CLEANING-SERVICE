@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application, either a client or an admin.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "format": "email", "description": "Email address" },
+        "role": { "type": "string", "enum": ["client", "admin"], "description": "User role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["name", "email", "role", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A cleaning service booking.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "ID of the user who made the booking" },
+        "userName": { "type": "string", "description": "Name of the user" },
+        "serviceType": { "type": "string", "description": "Type of cleaning service" },
+        "date": { "type": "string", "format": "date", "description": "Date of the service" },
+        "time": { "type": "string", "description": "Time of the service" },
+        "address": { "type": "string", "description": "Service address" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "completed", "cancelled"], "description": "Booking status" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["userId", "userName", "serviceType", "date", "time", "address", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles."
+    },
+    "bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Stores all service bookings."
+    }
+  }
+}

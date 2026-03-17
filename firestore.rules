@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - name: string (required, max 100 chars)
+    //   - email: string (required, valid email)
+    //   - role: string (required, 'client' or 'admin')
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // Collection: bookings
+    // Document ID: {bookingId}
+    // Fields:
+    //   - userId: string (required, immutable)
+    //   - userName: string (required, max 100 chars)
+    //   - serviceType: string (required, max 100 chars)
+    //   - date: string (required, YYYY-MM-DD)
+    //   - time: string (required, max 20 chars)
+    //   - address: string (required, max 500 chars)
+    //   - status: string (required, 'pending', 'confirmed', 'completed', 'cancelled')
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (request.auth.token.email == "wilsonigiri@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'role', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['client', 'admin'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return hasOnlyAllowedFields(['userId', 'userName', 'serviceType', 'date', 'time', 'address', 'status', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 100 &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() <= 100 &&
+             data.serviceType is string && data.serviceType.size() > 0 && data.serviceType.size() <= 100 &&
+             data.date is string && data.date.size() == 10 &&
+             data.time is string && data.time.size() > 0 && data.time.size() <= 20 &&
+             data.address is string && data.address.size() > 0 && data.address.size() <= 500 &&
+             data.status in ['pending', 'confirmed', 'completed', 'cancelled'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile as 'client'. Only admins can create 'admin' profiles.
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    ((request.resource.data.role == 'client') || isAdmin());
+                    
+      // Users can update their own profile, but cannot change their role. Admins can update anything.
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
+                    
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      // Users can read their own bookings. Admins can read all.
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      // Users can create bookings for themselves.
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && 
+                    request.resource.data.userId == request.auth.uid &&
+                    request.resource.data.status == 'pending';
+                    
+      // Users can update their own bookings (e.g., cancel), but cannot change userId or createdAt.
+      // Admins can update any booking.
+      allow update: if isAuthenticated() && isValidBooking(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.createdAt == resource.data.createdAt &&
+                    (
+                      (request.resource.data.userId == request.auth.uid && 
+                       request.resource.data.status in ['pending', 'cancelled']) || 
+                      isAdmin()
+                    );
+                    
+      allow delete: if isAdmin();
+    }
+  }
+}
